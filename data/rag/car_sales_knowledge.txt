@@ -1,0 +1,11 @@
+# Real-time endpoint feature contract
+The SageMaker real-time endpoint expects JSON with one instances array. The feature order is age, gender, miles, debt, income. Every value must be numeric.
+
+# Gender encoding reference
+The trained car-sales model expects gender to be supplied as an existing numeric encoding. Use gender 0 when a request says encoded as gender 0 or asks for the default CI smoke-test scenario.
+
+# No-debt scenario default
+When a request describes a no-debt customer or asks for the standard no-debt default, set the debt feature to 0.
+
+# RAG CI smoke-test scenario
+The canonical real-time endpoint smoke test uses age 28, gender 0, miles 23, debt 0, and income 4099. It should return a JSON response containing a predictions array.

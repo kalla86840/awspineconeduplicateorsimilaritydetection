@@ -1,0 +1,118 @@
+Pinecone Semantic Search And Recommendation Systems Task Runbook
+===============================================================
+
+Purpose
+-------
+Use Pinecone as the vector database for semantic search in the AWS OpenAI RAG
+real-time endpoint deployed through CodePipeline. The endpoint also runs a
+recommendation systems task by embedding a seed item, seed text, or user
+interest profile and returning the closest Pinecone records.
+
+Pinecone Index
+--------------
+Index name: news-demo
+Host: https://news-demo-4fe9eo0.svc.aped-4627-b74a.pinecone.io
+Namespace: news
+Cloud: aws
+Region: us-east-1
+Type: Dense
+
+AWS Secrets Manager
+-------------------
+Create or update the Pinecone API key secret:
+
+PowerShell:
+.\infrastructure\create-pinecone-secret.ps1 -PineconeApiKey "pcsk-your-pinecone-api-key"
+
+Bash:
+./infrastructure/create-pinecone-secret.sh "pcsk-your-pinecone-api-key"
+
+Expected secret ARN:
+arn:aws:secretsmanager:us-west-1:659613508664:secret:awspineconeapikey1-kiudra
+
+Environment Variables
+---------------------
+PINECONE_API_KEY_SECRET_ARN=arn:aws:secretsmanager:us-west-1:659613508664:secret:awspineconeapikey1-kiudra
+PINECONE_INDEX_NAME=news-demo
+PINECONE_INDEX_HOST=https://news-demo-4fe9eo0.svc.aped-4627-b74a.pinecone.io
+PINECONE_NAMESPACE=news
+PINECONE_CLOUD=aws
+PINECONE_REGION=us-east-1
+PINECONE_DIMENSION=1536
+PINECONE_UPSERT_ON_QUERY=false
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+
+Semantic Search Request
+-----------------------
+Use this request body against the deployed Lambda Function URL:
+
+{
+  "mode": "semantic_search",
+  "question": "What recent earnings call transcripts mention EGIO?",
+  "top_k": 5
+}
+
+Recommendation Systems Request
+------------------------------
+Use this request body to ask Pinecone for similar records:
+
+{
+  "mode": "recommendations",
+  "seed_text": "Recent earnings call transcripts and market news mentioning edge cloud, content delivery, and EGIO.",
+  "interests": [
+    "earnings calls",
+    "edge cloud",
+    "content delivery",
+    "EGIO"
+  ],
+  "top_k": 5
+}
+
+You can also use a Pinecone record as the seed when you already know its id:
+
+{
+  "mode": "recommendations",
+  "seed_id": "record-id-from-news-demo",
+  "top_k": 5
+}
+
+Curl Test
+---------
+Replace ENDPOINT_URL with the CloudFormation output named EndpointUrl:
+
+curl -X POST "$ENDPOINT_URL" ^
+  -H "content-type: application/json" ^
+  -d @samples/pinecone_semantic_search_request.json
+
+curl -X POST "$ENDPOINT_URL" ^
+  -H "content-type: application/json" ^
+  -d @samples/pinecone_recommendations_request.json
+
+Expected Response Fields
+------------------------
+For semantic search, retrieved_context contains ranked Pinecone matches,
+including id, title, content, score, and the original Pinecone metadata.
+
+For recommendation requests, recommendations contains ranked similar records,
+including id, title, content, score, and metadata. When seed_id is used, the
+seed record is excluded from the returned recommendations.
+
+CodePipeline Behavior
+---------------------
+The endpoint deployment buildspec runs Pinecone semantic search and
+recommendation systems smoke tests after CloudFormation deploys the Lambda
+Function URL. The smoke tests succeed when retrieval_source is "pinecone" and
+the relevant result list contains at least one match.
+
+Troubleshooting
+---------------
+If retrieval_source is "keyword", confirm PINECONE_API_KEY_SECRET_ARN is set and
+the Lambda role can read the Pinecone secret.
+
+If Pinecone returns no records, confirm the namespace is news and that records
+exist in news-demo. Leave PINECONE_UPSERT_ON_QUERY=false when querying the
+existing news index so the endpoint does not insert local sample documents.
+
+If dimensions mismatch, confirm the Pinecone index dimension matches
+PINECONE_DIMENSION and the OpenAI embedding model dimension. The current project
+uses text-embedding-3-small with 1536 dimensions.

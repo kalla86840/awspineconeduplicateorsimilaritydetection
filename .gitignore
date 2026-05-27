@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+.venv*/
+venv/
+dist/
+build/
+*.egg-info/
+
+# Local ML artifacts
+models/
+artifacts/
+outputs/
+*.joblib
+*.pkl
+*.tar.gz
+
+# Local environment files
+.env
+.env.*
+!.env.example

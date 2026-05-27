@@ -1,0 +1,5 @@
+{
+  "mode": "semantic_search",
+  "question": "What recent earnings call transcripts mention EGIO?",
+  "top_k": 5
+}

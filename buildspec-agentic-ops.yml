@@ -1,0 +1,28 @@
+version: 0.2
+
+env:
+  variables:
+    AWS_DEFAULT_REGION: us-west-1
+    AWS_REGION: us-west-1
+    AWS_SDK_LOAD_CONFIG: "1"
+    DEPLOY_ENVIRONMENT: staging
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.10
+    commands:
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+  build:
+    commands:
+      - |
+        if [ -z "$OPENAI_API_KEY" ]; then
+          echo "OPENAI_API_KEY is not configured; skipping OpenAI-backed agentic endpoint inference."
+          exit 0
+        fi
+        python scripts/agentic_ops_invoke_endpoint.py \
+          --config config/default.yaml \
+          --environment "$DEPLOY_ENVIRONMENT" \
+          --use-rag \
+          --scenario "Hospital agent receives a 28 year old patient encoded as gender 0 with operational measure 23, no debt or liability, and resource value 4099. Doctor validates the values and nurse confirms the endpoint handoff."

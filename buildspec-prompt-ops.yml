@@ -1,0 +1,34 @@
+version: 0.2
+
+env:
+  variables:
+    AWS_DEFAULT_REGION: us-west-1
+    AWS_REGION: us-west-1
+    AWS_SDK_LOAD_CONFIG: "1"
+    DEPLOY_ENVIRONMENT: staging
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.10
+    commands:
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+  build:
+    commands:
+      - |
+        if [ -n "$OPENAI_API_KEY" ]; then
+          python scripts/prompt_ops_invoke_endpoint.py \
+            --config config/default.yaml \
+            --environment "$DEPLOY_ENVIRONMENT" \
+            --description "A 28 year old customer encoded as gender 0 has a vehicle with 23 miles, no debt, and income of 4099."
+        else
+          python scripts/prompt_ops_invoke_endpoint.py \
+            --config config/default.yaml \
+            --environment "$DEPLOY_ENVIRONMENT" \
+            --age 28 \
+            --gender 0 \
+            --miles 23 \
+            --debt 0 \
+            --income 4099
+        fi

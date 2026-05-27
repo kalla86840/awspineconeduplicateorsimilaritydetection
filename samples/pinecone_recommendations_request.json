@@ -1,0 +1,11 @@
+{
+  "mode": "recommendations",
+  "seed_text": "Recent earnings call transcripts and market news mentioning edge cloud, content delivery, and EGIO.",
+  "interests": [
+    "earnings calls",
+    "edge cloud",
+    "content delivery",
+    "EGIO"
+  ],
+  "top_k": 5
+}
