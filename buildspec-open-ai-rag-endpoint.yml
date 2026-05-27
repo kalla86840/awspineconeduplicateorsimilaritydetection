@@ -14,6 +14,11 @@ env:
     PINECONE_INDEX_HOST: https://news-demo-4fe9eo0.svc.aped-4627-b74a.pinecone.io
     PINECONE_NAMESPACE: news
     PINECONE_MEMORY_NAMESPACE: agent-memory
+    PINECONE_DUPLICATE_NAMESPACE: news
+    PINECONE_CLASSIFICATION_NAMESPACE: news
+    PINECONE_CLUSTERING_NAMESPACE: news
+    DUPLICATE_SCORE_THRESHOLD: "0.98"
+    SIMILARITY_SCORE_THRESHOLD: "0.85"
 
 phases:
   install:
@@ -48,6 +53,11 @@ phases:
             PineconeIndexHost="$PINECONE_INDEX_HOST" \
             PineconeNamespace="$PINECONE_NAMESPACE" \
             PineconeMemoryNamespace="$PINECONE_MEMORY_NAMESPACE" \
+            PineconeDuplicateNamespace="$PINECONE_DUPLICATE_NAMESPACE" \
+            PineconeClassificationNamespace="$PINECONE_CLASSIFICATION_NAMESPACE" \
+            PineconeClusteringNamespace="$PINECONE_CLUSTERING_NAMESPACE" \
+            DuplicateScoreThreshold="$DUPLICATE_SCORE_THRESHOLD" \
+            SimilarityScoreThreshold="$SIMILARITY_SCORE_THRESHOLD" \
             OpenAIModel="$OPENAI_MODEL"
       - aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs" --output table
       - ENDPOINT_URL=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='EndpointUrl'].OutputValue | [0]" --output text)
@@ -57,6 +67,10 @@ phases:
       - python -c "import json; body=json.load(open('pinecone-recommendations-response.json')); assert body.get('retrieval_source') == 'pinecone' and body.get('recommendations'), body; print('Pinecone recommendation systems task passed')"
       - 'curl -sS -f -X POST "$ENDPOINT_URL" -H "content-type: application/json" -d @samples/pinecone_agent_memory_request.json -o pinecone-agent-memory-response.json'
       - python -c "import json; body=json.load(open('pinecone-agent-memory-response.json')); assert body.get('namespace') == 'agent-memory' and body.get('stored_memory', {}).get('memory_id'), body; print('Pinecone memory for AI agents task passed')"
+      - 'curl -sS -f -X POST "$ENDPOINT_URL" -H "content-type: application/json" -d @samples/pinecone_duplicate_similarity_request.json -o pinecone-duplicate-similarity-response.json'
+      - python -c "import json; body=json.load(open('pinecone-duplicate-similarity-response.json')); assert body.get('retrieval_source') == 'pinecone' and body.get('matches') is not None, body; print('Pinecone duplicate or similarity detection task passed')"
+      - 'curl -sS -f -X POST "$ENDPOINT_URL" -H "content-type: application/json" -d @samples/pinecone_classification_clustering_request.json -o pinecone-classification-clustering-response.json'
+      - python -c "import json; body=json.load(open('pinecone-classification-clustering-response.json')); assert body.get('retrieval_source') == 'pinecone' and body.get('matches') is not None and body.get('clusters') is not None, body; print('Pinecone classification and clustering support task passed')"
       - 'curl -sS -f -X POST "$ENDPOINT_URL" -H "content-type: application/json" -d @samples/open_ai_rag_endpoint_request.json -o open-ai-agentic-rag-endpoint-smoke-response.json'
       - python -c "import json; body=json.load(open('open-ai-agentic-rag-endpoint-smoke-response.json')); assert body.get('answer') and len(body.get('agents', [])) == 3, body; print('OpenAI multi-agent RAG endpoint smoke test passed')"
 
@@ -66,5 +80,7 @@ artifacts:
     - pinecone-semantic-search-response.json
     - pinecone-recommendations-response.json
     - pinecone-agent-memory-response.json
+    - pinecone-duplicate-similarity-response.json
+    - pinecone-classification-clustering-response.json
     - open-ai-agentic-rag-endpoint-smoke-response.json
 

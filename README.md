@@ -64,6 +64,7 @@ samples/open_ai_rag_endpoint_response.example.json
 samples/pinecone_semantic_search_request.json
 samples/pinecone_recommendations_request.json
 samples/pinecone_agent_memory_request.json
+samples/pinecone_duplicate_similarity_request.json
 ```
 
 Request shape:
@@ -128,6 +129,40 @@ Pinecone memory for AI agents task:
 Use `action: "search"` with `query`, plus optional `agent_id`, `task_id`, or
 `memory_type`, to recall stored memories from the Pinecone memory namespace.
 
+Pinecone classification and clustering support task:
+
+```json
+{
+  "mode": "classification_clustering",
+  "text": "Recent market news about edge cloud, content delivery, and EGIO earnings momentum.",
+  "top_k": 8,
+  "n_clusters": 3,
+  "label_field": "category",
+  "namespace": "news"
+}
+```
+
+The endpoint embeds the submitted text with OpenAI, queries Pinecone in real
+time, predicts a label from weighted neighbor metadata, and clusters the
+returned Pinecone vectors. Use `mode: "classification"` for classification-only
+responses or `mode: "clustering"` for clustering-only responses.
+
+Pinecone duplicate or similarity detection task:
+
+```json
+{
+  "mode": "duplicate_similarity",
+  "candidate_id": "candidate-egio-edge-cloud-news",
+  "candidate_text": "Recent market news and earnings call transcripts discussing EGIO, edge cloud services, content delivery, and infrastructure strategy.",
+  "top_k": 5,
+  "duplicate_threshold": 0.98,
+  "similarity_threshold": 0.85
+}
+```
+
+The endpoint embeds the candidate with OpenAI, queries Pinecone, and classifies
+matches as `duplicate`, `similar`, or `related` by score threshold.
+
 Agent sequence:
 
 - `manual_retrieval_agent`: identifies the most relevant manual sections and citations.
@@ -182,13 +217,18 @@ The AWS defaults currently filled in are:
 - Region: `us-west-1`
 - Artifact bucket: `mlopswithsagemaker111`
 - CodeStar connection: `arn:aws:codeconnections:us-west-1:659613508664:connection/4ea8863c-728d-450a-8752-251946939b36`
-- GitHub repository: `kalla86840/awspineconememoryforaiagents`
+- GitHub repository: `kalla86840/awspineconeduplicateorsimilaritydetection`
 - OpenAI secret ARN: `arn:aws:secretsmanager:us-west-1:659613508664:secret:openai/api-key-6BGXhJ`
 - Pinecone secret ARN: `arn:aws:secretsmanager:us-west-1:659613508664:secret:awspineconeapikey1-kiudra`
 - Pinecone index: `news-demo`
 - Pinecone host: `https://news-demo-4fe9eo0.svc.aped-4627-b74a.pinecone.io`
 - Pinecone namespace: `news`
 - Pinecone memory namespace: `agent-memory`
+- Pinecone duplicate namespace: `news`
+- Pinecone classification namespace: `news`
+- Pinecone clustering namespace: `news`
+- Duplicate score threshold: `0.98`
+- Similarity score threshold: `0.85`
 - Pinecone upsert on query: `false`, because `news-demo` already contains the news records.
 
 Update an existing secret:
@@ -214,6 +254,17 @@ aws secretsmanager put-secret-value \
   --secret-string "pcsk-your-pinecone-api-key"
 ```
 
+If the pipeline parameter needs the full Pinecone secret ARN, capture it after
+creation:
+
+```bash
+aws secretsmanager describe-secret \
+  --region us-west-1 \
+  --secret-id awspineconeapikey1 \
+  --query ARN \
+  --output text
+```
+
 ## Deploy Standalone RAG Endpoint Pipeline
 
 ```bash
@@ -226,14 +277,19 @@ aws cloudformation deploy \
     ProjectName=open-ai-agentic-rag \
     ArtifactBucketName=mlopswithsagemaker111 \
     CodeStarConnectionArn=arn:aws:codeconnections:us-west-1:659613508664:connection/4ea8863c-728d-450a-8752-251946939b36 \
-    RepositoryId=kalla86840/awspineconememoryforaiagents \
+    RepositoryId=kalla86840/awspineconeclassificationandclusteringsupport \
     BranchName=main \
     OpenAIApiKeySecretArn=arn:aws:secretsmanager:us-west-1:659613508664:secret:openai/api-key-6BGXhJ \
     PineconeApiKeySecretArn=arn:aws:secretsmanager:us-west-1:659613508664:secret:awspineconeapikey1-kiudra \
     PineconeIndexName=news-demo \
     PineconeIndexHost=https://news-demo-4fe9eo0.svc.aped-4627-b74a.pinecone.io \
     PineconeNamespace=news \
-    PineconeMemoryNamespace=agent-memory
+    PineconeMemoryNamespace=agent-memory \
+    PineconeDuplicateNamespace=news \
+    PineconeClassificationNamespace=news \
+    PineconeClusteringNamespace=news \
+    DuplicateScoreThreshold=0.98 \
+    SimilarityScoreThreshold=0.85
 ```
 
 Invoke after deployment:
@@ -268,6 +324,22 @@ curl -X POST "$ENDPOINT_URL" \
   -d @samples/pinecone_agent_memory_request.json
 ```
 
+Run the Pinecone duplicate or similarity detection task:
+
+```bash
+curl -X POST "$ENDPOINT_URL" \
+  -H "content-type: application/json" \
+  -d @samples/pinecone_duplicate_similarity_request.json
+```
+
+Run the Pinecone classification and clustering support task:
+
+```bash
+curl -X POST "$ENDPOINT_URL" \
+  -H "content-type: application/json" \
+  -d @samples/pinecone_classification_clustering_request.json
+```
+
 ## Deploy Agentic Hospital RAG Pipeline
 
 ```bash
@@ -280,7 +352,7 @@ aws cloudformation deploy \
     ProjectName=agentic-open-ai \
     ArtifactBucketName=mlopswithsagemaker111 \
     CodeStarConnectionArn=arn:aws:codeconnections:us-west-1:659613508664:connection/4ea8863c-728d-450a-8752-251946939b36 \
-    RepositoryId=kalla86840/awspineconememoryforaiagents \
+    RepositoryId=kalla86840/awspineconeclassificationandclusteringsupport \
     BranchName=main \
     OpenAIApiKeySecretArn=arn:aws:secretsmanager:us-west-1:659613508664:secret:openai/api-key-6BGXhJ \
     OpenAIModel=gpt-5.2

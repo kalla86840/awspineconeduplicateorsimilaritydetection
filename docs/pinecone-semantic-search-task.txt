@@ -1,5 +1,5 @@
-Pinecone Semantic Search, Recommendations, And Agent Memory Runbook
-===================================================================
+Pinecone Duplicate Or Similarity Detection Runbook
+==================================================
 
 Purpose
 -------
@@ -8,7 +8,9 @@ real-time endpoint deployed through CodePipeline. The endpoint also runs a
 recommendation systems task by embedding a seed item, seed text, or user
 interest profile and returning the closest Pinecone records. For AI agents, the
 endpoint can also write task memories into Pinecone and recall them later with
-semantic search.
+semantic search. The CI/CD guide task for this repository is duplicate or
+similarity detection: embed a candidate item with OpenAI, query Pinecone, and
+classify returned records as duplicate, similar, or related by score threshold.
 
 Pinecone Index
 --------------
@@ -16,6 +18,7 @@ Index name: news-demo
 Host: https://news-demo-4fe9eo0.svc.aped-4627-b74a.pinecone.io
 Namespace: news
 Memory namespace: agent-memory
+Duplicate detection namespace: news
 Cloud: aws
 Region: us-east-1
 Type: Dense
@@ -40,11 +43,14 @@ PINECONE_INDEX_NAME=news-demo
 PINECONE_INDEX_HOST=https://news-demo-4fe9eo0.svc.aped-4627-b74a.pinecone.io
 PINECONE_NAMESPACE=news
 PINECONE_MEMORY_NAMESPACE=agent-memory
+PINECONE_DUPLICATE_NAMESPACE=news
 PINECONE_CLOUD=aws
 PINECONE_REGION=us-east-1
 PINECONE_DIMENSION=1536
 PINECONE_UPSERT_ON_QUERY=false
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+DUPLICATE_SCORE_THRESHOLD=0.98
+SIMILARITY_SCORE_THRESHOLD=0.85
 
 Semantic Search Request
 -----------------------
@@ -79,6 +85,24 @@ You can also use a Pinecone record as the seed when you already know its id:
   "seed_id": "record-id-from-news-demo",
   "top_k": 5
 }
+
+Duplicate Or Similarity Detection Request
+-----------------------------------------
+Use this request body to detect whether a candidate item already exists or is
+near an existing Pinecone record:
+
+{
+  "mode": "duplicate_similarity",
+  "candidate_id": "candidate-egio-edge-cloud-news",
+  "candidate_text": "Recent market news and earnings call transcripts discussing EGIO, edge cloud services, content delivery, and infrastructure strategy.",
+  "top_k": 5,
+  "duplicate_threshold": 0.98,
+  "similarity_threshold": 0.85
+}
+
+The endpoint embeds candidate_text with OpenAI, queries the configured Pinecone
+namespace, excludes candidate_id when present, and returns likely_duplicates,
+similar_records, and all matches with a classification field.
 
 Pinecone Memory For AI Agents Task
 ----------------------------------
@@ -124,6 +148,10 @@ curl -X POST "$ENDPOINT_URL" ^
   -H "content-type: application/json" ^
   -d @samples/pinecone_agent_memory_request.json
 
+curl -X POST "$ENDPOINT_URL" ^
+  -H "content-type: application/json" ^
+  -d @samples/pinecone_duplicate_similarity_request.json
+
 Expected Response Fields
 ------------------------
 For semantic search, retrieved_context contains ranked Pinecone matches,
@@ -137,13 +165,19 @@ For agent_memory write requests, stored_memory contains the Pinecone memory id,
 namespace, and metadata. When query is included, memories contains ranked memory
 matches from the agent-memory namespace.
 
+For duplicate_similarity requests, likely_duplicates contains matches at or
+above DUPLICATE_SCORE_THRESHOLD, similar_records contains matches at or above
+SIMILARITY_SCORE_THRESHOLD, and matches contains the top classified Pinecone
+matches.
+
 CodePipeline Behavior
 ---------------------
 The endpoint deployment buildspec runs Pinecone semantic search and
 recommendation systems smoke tests after CloudFormation deploys the Lambda
 Function URL. It also runs the Pinecone memory for AI agents task. The smoke
-tests succeed when retrieval_source is "pinecone", the relevant result list
-contains at least one match, and an agent memory id is returned.
+tests now also run the Pinecone duplicate or similarity detection task. The
+smoke tests succeed when retrieval_source is "pinecone", the relevant result
+list is present, and an agent memory id is returned.
 
 Troubleshooting
 ---------------

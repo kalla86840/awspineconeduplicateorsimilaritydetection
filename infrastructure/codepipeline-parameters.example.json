@@ -13,7 +13,7 @@
   },
   {
     "ParameterKey": "RepositoryId",
-    "ParameterValue": "kalla86840/awspineconememoryforaiagents"
+    "ParameterValue": "kalla86840/awspineconeduplicateorsimilaritydetection"
   },
   {
     "ParameterKey": "BranchName",

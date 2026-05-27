@@ -40,6 +40,17 @@ def create_pipeline(config_path="config/default.yaml"):
         py_version="py3",
         instance_type=config["model"]["training_instance_type"],
     )
+    feature_columns = ",".join(config["model"].get("feature_columns", []))
+    task_type = config["model"].get("task_type", "regression")
+    training_hyperparameters = {
+        "task-type": task_type,
+        "n-estimators": 100,
+        "random-state": 42,
+        "target-column": config["model"]["target_column"],
+        "feature-columns": feature_columns,
+    }
+    if task_type == "clustering":
+        training_hyperparameters["n-clusters"] = config["model"].get("n_clusters", 4)
 
     estimator = SKLearn(
         entry_point="train.py",
@@ -51,11 +62,7 @@ def create_pipeline(config_path="config/default.yaml"):
         instance_count=1,
         base_job_name=f"{base_job_prefix}-train",
         sagemaker_session=pipeline_session,
-        hyperparameters={
-            "n-estimators": 100,
-            "random-state": 42,
-            "target-column": config["model"]["target_column"],
-        },
+        hyperparameters=training_hyperparameters,
     )
 
     train_step = TrainingStep(
@@ -105,8 +112,12 @@ def create_pipeline(config_path="config/default.yaml"):
         ],
         code=str(ROOT_DIR / "src" / "evaluate.py"),
         job_arguments=[
+            "--task-type",
+            task_type,
             "--target-column",
             config["model"]["target_column"],
+            "--feature-columns",
+            feature_columns,
         ],
         property_files=[evaluation_report],
     )

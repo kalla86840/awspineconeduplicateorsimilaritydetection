@@ -14,12 +14,17 @@ PINECONE_INDEX_NAME = os.environ.get("PINECONE_INDEX_NAME", "news-demo")
 PINECONE_INDEX_HOST = os.environ.get("PINECONE_INDEX_HOST")
 PINECONE_NAMESPACE = os.environ.get("PINECONE_NAMESPACE", "news")
 PINECONE_MEMORY_NAMESPACE = os.environ.get("PINECONE_MEMORY_NAMESPACE", "agent-memory")
+PINECONE_DUPLICATE_NAMESPACE = os.environ.get("PINECONE_DUPLICATE_NAMESPACE", PINECONE_NAMESPACE)
+PINECONE_CLASSIFICATION_NAMESPACE = os.environ.get("PINECONE_CLASSIFICATION_NAMESPACE", PINECONE_NAMESPACE)
+PINECONE_CLUSTERING_NAMESPACE = os.environ.get("PINECONE_CLUSTERING_NAMESPACE", PINECONE_CLASSIFICATION_NAMESPACE)
 PINECONE_CLOUD = os.environ.get("PINECONE_CLOUD", "aws")
 PINECONE_REGION = os.environ.get("PINECONE_REGION", "us-east-1")
 PINECONE_DIMENSION = int(os.environ.get("PINECONE_DIMENSION", "1536"))
 PINECONE_METRIC = os.environ.get("PINECONE_METRIC", "cosine")
 ENABLE_PINECONE = os.environ.get("ENABLE_PINECONE", "true").lower() == "true"
 PINECONE_UPSERT_ON_QUERY = os.environ.get("PINECONE_UPSERT_ON_QUERY", "false").lower() == "true"
+DUPLICATE_SCORE_THRESHOLD = float(os.environ.get("DUPLICATE_SCORE_THRESHOLD", "0.98"))
+SIMILARITY_SCORE_THRESHOLD = float(os.environ.get("SIMILARITY_SCORE_THRESHOLD", "0.85"))
 MAX_OUTPUT_TOKENS = int(os.environ.get("MAX_OUTPUT_TOKENS", "700"))
 TOP_K = int(os.environ.get("TOP_K", "3"))
 _OPENAI_API_KEY = None
@@ -174,6 +179,28 @@ def pinecone_matches_to_documents(result, exclude_ids=None):
     return context_documents
 
 
+def pinecone_matches_with_values(result, exclude_ids=None):
+    exclude_ids = set(exclude_ids or [])
+    matches = []
+    for match in _pinecone_result_get(result, "matches", []):
+        match_id = _pinecone_result_get(match, "id")
+        if match_id in exclude_ids:
+            continue
+        metadata = _pinecone_result_get(match, "metadata", {}) or {}
+        content = metadata.get("content") or metadata.get("text") or metadata.get("summary") or json.dumps(metadata)
+        matches.append(
+            {
+                "id": match_id,
+                "title": metadata.get("title", match_id),
+                "content": content,
+                "score": _pinecone_result_get(match, "score"),
+                "metadata": metadata,
+                "values": _pinecone_result_get(match, "values", []) or [],
+            }
+        )
+    return matches
+
+
 def _records_from_fetch(fetch_result):
     vectors = _pinecone_result_get(fetch_result, "vectors", {}) or {}
     if isinstance(vectors, dict):
@@ -221,6 +248,220 @@ def recommend_from_pinecone(payload, documents, top_k=TOP_K):
     result = index.query(vector=vector, top_k=top_k + len(exclude_ids), include_metadata=True, namespace=PINECONE_NAMESPACE)
     recommendations = pinecone_matches_to_documents(result, exclude_ids=exclude_ids)
     return recommendations[:top_k], seed_text
+
+
+def _duplicate_candidate_text(payload):
+    candidate = payload.get("candidate") or {}
+    candidate_text = (
+        payload.get("candidate_text")
+        or payload.get("text")
+        or payload.get("content")
+        or payload.get("question")
+        or candidate.get("text")
+        or candidate.get("content")
+        or candidate.get("summary")
+    )
+    if candidate_text:
+        return candidate_text
+    if candidate:
+        text_parts = [
+            str(value)
+            for value in [
+                candidate.get("title"),
+                candidate.get("description"),
+                candidate.get("body"),
+                candidate.get("metadata"),
+            ]
+            if value
+        ]
+        if text_parts:
+            return "\n".join(text_parts)
+    raise ValueError("Duplicate or similarity detection requests must include candidate_text, text, content, question, or candidate content.")
+
+
+def detect_duplicate_similarity(payload, documents, top_k=TOP_K):
+    from openai import OpenAI
+    client = OpenAI(api_key=get_openai_api_key())
+    index = get_pinecone_index()
+    if PINECONE_UPSERT_ON_QUERY:
+        upsert_documents_to_pinecone(client, index, documents)
+
+    namespace = payload.get("namespace") or PINECONE_DUPLICATE_NAMESPACE
+    candidate_text = _duplicate_candidate_text(payload)
+    candidate_id = payload.get("candidate_id") or (payload.get("candidate") or {}).get("id")
+    duplicate_threshold = float(payload.get("duplicate_threshold", DUPLICATE_SCORE_THRESHOLD))
+    similarity_threshold = float(payload.get("similarity_threshold", SIMILARITY_SCORE_THRESHOLD))
+    exclude_ids = set(payload.get("exclude_ids") or [])
+    if candidate_id:
+        exclude_ids.add(candidate_id)
+
+    vector = embed_texts(client, [candidate_text])[0]
+    result = index.query(
+        vector=vector,
+        top_k=top_k + len(exclude_ids),
+        include_metadata=True,
+        namespace=namespace,
+    )
+    matches = pinecone_matches_to_documents(result, exclude_ids=exclude_ids)
+    classified_matches = []
+    for match in matches:
+        score = match.get("score") or 0
+        if score >= duplicate_threshold:
+            classification = "duplicate"
+        elif score >= similarity_threshold:
+            classification = "similar"
+        else:
+            classification = "related"
+        classified_match = dict(match)
+        classified_match["classification"] = classification
+        classified_matches.append(classified_match)
+
+    likely_duplicates = [match for match in classified_matches if match["classification"] == "duplicate"]
+    similar_records = [match for match in classified_matches if match["classification"] == "similar"]
+    return {
+        "mode": "duplicate_similarity",
+        "candidate_id": candidate_id,
+        "candidate_text": candidate_text,
+        "retrieval_source": "pinecone",
+        "namespace": namespace,
+        "duplicate_threshold": duplicate_threshold,
+        "similarity_threshold": similarity_threshold,
+        "likely_duplicates": likely_duplicates,
+        "similar_records": similar_records,
+        "matches": classified_matches[:top_k],
+    }
+
+
+def _classification_text(payload):
+    text = payload.get("text") or payload.get("content") or payload.get("question") or payload.get("query")
+    if text:
+        return text
+    candidate = payload.get("candidate") or {}
+    text_parts = [
+        str(value)
+        for value in [
+            candidate.get("title"),
+            candidate.get("description"),
+            candidate.get("content"),
+            candidate.get("summary"),
+        ]
+        if value
+    ]
+    if text_parts:
+        return "\n".join(text_parts)
+    raise ValueError("Classification and clustering requests must include text, content, question, query, or candidate content.")
+
+
+def _metadata_label(metadata, label_field):
+    for key in [label_field, "label", "category", "class", "segment", "topic"]:
+        if metadata.get(key):
+            return str(metadata[key])
+    return None
+
+
+def _vector_distance(left, right):
+    return sum((a - b) ** 2 for a, b in zip(left, right)) ** 0.5
+
+
+def _average_vectors(vectors):
+    if not vectors:
+        return []
+    width = len(vectors[0])
+    return [sum(vector[index] for vector in vectors) / len(vectors) for index in range(width)]
+
+
+def cluster_vector_matches(matches, n_clusters):
+    vector_matches = [match for match in matches if match.get("values")]
+    if not vector_matches:
+        return []
+    n_clusters = max(1, min(int(n_clusters), len(vector_matches)))
+    centroids = [list(match["values"]) for match in vector_matches[:n_clusters]]
+    assignments = [0] * len(vector_matches)
+
+    for _ in range(8):
+        changed = False
+        for index, match in enumerate(vector_matches):
+            distances = [_vector_distance(match["values"], centroid) for centroid in centroids]
+            cluster = min(range(len(distances)), key=distances.__getitem__)
+            if assignments[index] != cluster:
+                assignments[index] = cluster
+                changed = True
+        if not changed:
+            break
+        for cluster in range(n_clusters):
+            cluster_vectors = [
+                match["values"]
+                for match_index, match in enumerate(vector_matches)
+                if assignments[match_index] == cluster
+            ]
+            if cluster_vectors:
+                centroids[cluster] = _average_vectors(cluster_vectors)
+
+    clusters = []
+    for cluster in range(n_clusters):
+        members = []
+        for match_index, match in enumerate(vector_matches):
+            if assignments[match_index] == cluster:
+                members.append(
+                    {
+                        "id": match["id"],
+                        "title": match["title"],
+                        "score": match.get("score"),
+                        "metadata": match.get("metadata", {}),
+                    }
+                )
+        clusters.append({"cluster": cluster, "size": len(members), "members": members})
+    return clusters
+
+
+def classify_and_cluster(payload, documents, top_k=TOP_K):
+    from openai import OpenAI
+    client = OpenAI(api_key=get_openai_api_key())
+    index = get_pinecone_index()
+    if PINECONE_UPSERT_ON_QUERY:
+        upsert_documents_to_pinecone(client, index, documents)
+
+    text = _classification_text(payload)
+    namespace = payload.get("namespace") or PINECONE_CLASSIFICATION_NAMESPACE
+    label_field = payload.get("label_field", "category")
+    n_clusters = int(payload.get("n_clusters", 3))
+    vector = embed_texts(client, [text])[0]
+    result = index.query(
+        vector=vector,
+        top_k=top_k,
+        include_metadata=True,
+        include_values=True,
+        namespace=namespace,
+    )
+    matches = pinecone_matches_with_values(result)
+
+    label_scores = {}
+    for match in matches:
+        label = _metadata_label(match.get("metadata", {}), label_field)
+        if label:
+            label_scores[label] = label_scores.get(label, 0.0) + float(match.get("score") or 0.0)
+    predicted_label = max(label_scores, key=label_scores.get) if label_scores else "unlabeled"
+    clusters = cluster_vector_matches(matches, n_clusters)
+
+    return {
+        "mode": payload.get("mode", "classification_clustering"),
+        "text": text,
+        "retrieval_source": "pinecone",
+        "namespace": namespace,
+        "label_field": label_field,
+        "predicted_label": predicted_label,
+        "label_scores": label_scores,
+        "clusters": clusters,
+        "matches": [
+            {
+                "id": match["id"],
+                "title": match["title"],
+                "score": match.get("score"),
+                "metadata": match.get("metadata", {}),
+            }
+            for match in matches
+        ],
+    }
 
 
 def _memory_filter(payload):
@@ -342,12 +583,25 @@ def handler(event, context):
             payload = body or {}
         mode = payload.get("mode", "answer")
         question = payload.get("question")
-        if mode not in ["recommendations", "agent_memory"] and not question:
+        pinecone_task_modes = ["recommendations", "agent_memory", "duplicate_similarity", "classification", "clustering", "classification_clustering"]
+        if mode not in pinecone_task_modes and not question:
             return response(400, {"error": "Request JSON must include a non-empty question."})
         top_k = int(payload.get("top_k", TOP_K))
         requested_agents = payload.get("agents")
         if mode == "agent_memory":
             return response(200, agent_memory_task(payload, top_k=top_k))
+        if mode == "duplicate_similarity":
+            documents = load_documents() if PINECONE_UPSERT_ON_QUERY else []
+            return response(200, detect_duplicate_similarity(payload, documents, top_k=top_k))
+        if mode in ["classification", "clustering", "classification_clustering"]:
+            documents = load_documents() if PINECONE_UPSERT_ON_QUERY else []
+            result = classify_and_cluster(payload, documents, top_k=top_k)
+            if mode == "classification":
+                result.pop("clusters", None)
+            elif mode == "clustering":
+                result.pop("predicted_label", None)
+                result.pop("label_scores", None)
+            return response(200, result)
         if mode == "recommendations":
             documents = load_documents() if PINECONE_UPSERT_ON_QUERY else []
             recommendations, seed_text = recommend_from_pinecone(payload, documents, top_k=top_k)

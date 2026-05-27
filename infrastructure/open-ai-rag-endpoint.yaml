@@ -31,6 +31,21 @@ Parameters:
   PineconeMemoryNamespace:
     Type: String
     Default: agent-memory
+  PineconeDuplicateNamespace:
+    Type: String
+    Default: news
+  PineconeClassificationNamespace:
+    Type: String
+    Default: news
+  PineconeClusteringNamespace:
+    Type: String
+    Default: news
+  DuplicateScoreThreshold:
+    Type: String
+    Default: "0.98"
+  SimilarityScoreThreshold:
+    Type: String
+    Default: "0.85"
   PineconeCloud:
     Type: String
     Default: aws
@@ -96,6 +111,11 @@ Resources:
           PINECONE_INDEX_HOST: !Ref PineconeIndexHost
           PINECONE_NAMESPACE: !Ref PineconeNamespace
           PINECONE_MEMORY_NAMESPACE: !Ref PineconeMemoryNamespace
+          PINECONE_DUPLICATE_NAMESPACE: !Ref PineconeDuplicateNamespace
+          PINECONE_CLASSIFICATION_NAMESPACE: !Ref PineconeClassificationNamespace
+          PINECONE_CLUSTERING_NAMESPACE: !Ref PineconeClusteringNamespace
+          DUPLICATE_SCORE_THRESHOLD: !Ref DuplicateScoreThreshold
+          SIMILARITY_SCORE_THRESHOLD: !Ref SimilarityScoreThreshold
           PINECONE_CLOUD: !Ref PineconeCloud
           PINECONE_REGION: !Ref PineconeRegion
           PINECONE_DIMENSION: "1536"

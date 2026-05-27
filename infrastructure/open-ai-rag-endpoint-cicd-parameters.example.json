@@ -13,7 +13,7 @@
   },
   {
     "ParameterKey": "RepositoryId",
-    "ParameterValue": "kalla86840/awspineconememoryforaiagents"
+    "ParameterValue": "kalla86840/awspineconeduplicateorsimilaritydetection"
   },
   {
     "ParameterKey": "BranchName",
@@ -42,5 +42,17 @@
   {
     "ParameterKey": "PineconeMemoryNamespace",
     "ParameterValue": "agent-memory"
+  },
+  {
+    "ParameterKey": "PineconeDuplicateNamespace",
+    "ParameterValue": "news"
+  },
+  {
+    "ParameterKey": "DuplicateScoreThreshold",
+    "ParameterValue": "0.98"
+  },
+  {
+    "ParameterKey": "SimilarityScoreThreshold",
+    "ParameterValue": "0.85"
   }
 ]

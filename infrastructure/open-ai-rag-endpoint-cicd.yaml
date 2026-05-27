@@ -13,7 +13,7 @@ Parameters:
     Default: arn:aws:codeconnections:us-west-1:659613508664:connection/4ea8863c-728d-450a-8752-251946939b36
   RepositoryId:
     Type: String
-    Default: kalla86840/awspineconememoryforaiagents
+    Default: kalla86840/awspineconeclassificationandclusteringsupport
   BranchName:
     Type: String
     Default: main
@@ -35,6 +35,21 @@ Parameters:
   PineconeMemoryNamespace:
     Type: String
     Default: agent-memory
+  PineconeDuplicateNamespace:
+    Type: String
+    Default: news
+  PineconeClassificationNamespace:
+    Type: String
+    Default: news
+  PineconeClusteringNamespace:
+    Type: String
+    Default: news
+  DuplicateScoreThreshold:
+    Type: String
+    Default: "0.98"
+  SimilarityScoreThreshold:
+    Type: String
+    Default: "0.85"
 
 Resources:
   CodeBuildRole:
@@ -142,6 +157,16 @@ Resources:
             Value: !Ref PineconeNamespace
           - Name: PINECONE_MEMORY_NAMESPACE
             Value: !Ref PineconeMemoryNamespace
+          - Name: PINECONE_DUPLICATE_NAMESPACE
+            Value: !Ref PineconeDuplicateNamespace
+          - Name: PINECONE_CLASSIFICATION_NAMESPACE
+            Value: !Ref PineconeClassificationNamespace
+          - Name: PINECONE_CLUSTERING_NAMESPACE
+            Value: !Ref PineconeClusteringNamespace
+          - Name: DUPLICATE_SCORE_THRESHOLD
+            Value: !Ref DuplicateScoreThreshold
+          - Name: SIMILARITY_SCORE_THRESHOLD
+            Value: !Ref SimilarityScoreThreshold
       Source:
         Type: CODEPIPELINE
         BuildSpec: buildspec-open-ai-rag-endpoint.yml

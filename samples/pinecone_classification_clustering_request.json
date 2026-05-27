@@ -1,0 +1,8 @@
+{
+  "mode": "classification_clustering",
+  "text": "Recent market news about edge cloud, content delivery, and EGIO earnings momentum.",
+  "top_k": 8,
+  "n_clusters": 3,
+  "label_field": "category",
+  "namespace": "news"
+}

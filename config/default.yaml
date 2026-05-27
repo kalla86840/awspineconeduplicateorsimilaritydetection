@@ -8,6 +8,7 @@ pipeline:
   base_job_prefix: open-ai-rag
 
 model:
+  task_type: regression
   model_package_group_name: open-ai-rag-package-group
   approval_status: PendingManualApproval
   inference_instance_type: ml.m5.large
@@ -19,6 +20,7 @@ model:
     - miles
     - debt
     - income
+  n_clusters: 4
 
 data:
   local_path: data/raw/cars_1020.csv

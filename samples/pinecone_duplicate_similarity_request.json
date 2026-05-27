@@ -1,0 +1,8 @@
+{
+  "mode": "duplicate_similarity",
+  "candidate_id": "candidate-egio-edge-cloud-news",
+  "candidate_text": "Recent market news and earnings call transcripts discussing EGIO, edge cloud services, content delivery, and infrastructure strategy.",
+  "top_k": 5,
+  "duplicate_threshold": 0.98,
+  "similarity_threshold": 0.85
+}
