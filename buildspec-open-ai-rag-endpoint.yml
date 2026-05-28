@@ -63,6 +63,8 @@ phases:
       - ENDPOINT_URL=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='EndpointUrl'].OutputValue | [0]" --output text)
       - 'curl -sS -f -X POST "$ENDPOINT_URL" -H "content-type: application/json" -d @samples/pinecone_semantic_search_request.json -o pinecone-semantic-search-response.json'
       - python -c "import json; body=json.load(open('pinecone-semantic-search-response.json')); assert body.get('retrieval_source') == 'pinecone' and body.get('retrieved_context'), body; print('Pinecone semantic search task passed')"
+      - 'curl -sS -f -X POST "$ENDPOINT_URL" -H "content-type: application/json" -d @samples/pinecone_chatbot_assistant_rag_request.json -o pinecone-chatbot-assistant-rag-response.json'
+      - python -c "import json; body=json.load(open('pinecone-chatbot-assistant-rag-response.json')); assert body.get('mode') == 'chatbot_rag' and body.get('retrieval_source') == 'pinecone' and body.get('answer'), body; print('Pinecone RAG for chatbots and assistants task passed')"
       - 'curl -sS -f -X POST "$ENDPOINT_URL" -H "content-type: application/json" -d @samples/pinecone_recommendations_request.json -o pinecone-recommendations-response.json'
       - python -c "import json; body=json.load(open('pinecone-recommendations-response.json')); assert body.get('retrieval_source') == 'pinecone' and body.get('recommendations'), body; print('Pinecone recommendation systems task passed')"
       - 'curl -sS -f -X POST "$ENDPOINT_URL" -H "content-type: application/json" -d @samples/pinecone_agent_memory_request.json -o pinecone-agent-memory-response.json'
@@ -78,6 +80,7 @@ artifacts:
   files:
     - open-ai-agentic-rag-endpoint.zip
     - pinecone-semantic-search-response.json
+    - pinecone-chatbot-assistant-rag-response.json
     - pinecone-recommendations-response.json
     - pinecone-agent-memory-response.json
     - pinecone-duplicate-similarity-response.json

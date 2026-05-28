@@ -1,0 +1,12 @@
+{
+  "mode": "chatbot_rag",
+  "conversation_id": "demo-chatbot-session-001",
+  "assistant_id": "support-assistant",
+  "question": "What context should the assistant use before answering a support question about edge cloud and content delivery?",
+  "top_k": 5,
+  "agents": [
+    "manual_retrieval_agent",
+    "procedure_agent",
+    "safety_agent"
+  ]
+}

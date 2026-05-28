@@ -8,9 +8,13 @@ real-time endpoint deployed through CodePipeline. The endpoint also runs a
 recommendation systems task by embedding a seed item, seed text, or user
 interest profile and returning the closest Pinecone records. For AI agents, the
 endpoint can also write task memories into Pinecone and recall them later with
-semantic search. The CI/CD guide task for this repository is duplicate or
-similarity detection: embed a candidate item with OpenAI, query Pinecone, and
-classify returned records as duplicate, similar, or related by score threshold.
+semantic search. The CI/CD guide task for this repository is Pinecone RAG for
+chatbots and assistants: embed the user turn with OpenAI, retrieve grounded
+context from Pinecone in real time, run the multi-agent answer path, and return
+the assistant response with citations. The same endpoint still supports
+duplicate or similarity detection by embedding a candidate item with OpenAI,
+querying Pinecone, and classifying returned records as duplicate, similar, or
+related by score threshold.
 
 Pinecone Index
 --------------
@@ -61,6 +65,22 @@ Use this request body against the deployed Lambda Function URL:
   "question": "What recent earnings call transcripts mention EGIO?",
   "top_k": 5
 }
+
+Pinecone RAG For Chatbots And Assistants Request
+------------------------------------------------
+Use this request body to run the real-time assistant answer path over Pinecone
+retrieval. The endpoint preserves conversation_id and assistant_id in the
+response so callers can correlate the answer with a chatbot session.
+
+{
+  "mode": "chatbot_rag",
+  "conversation_id": "demo-chatbot-session-001",
+  "assistant_id": "support-assistant",
+  "question": "What context should the assistant use before answering a support question about edge cloud and content delivery?",
+  "top_k": 5
+}
+
+Equivalent mode aliases are assistant_rag and chatbot_assistant.
 
 Recommendation Systems Request
 ------------------------------
@@ -142,6 +162,10 @@ curl -X POST "$ENDPOINT_URL" ^
 
 curl -X POST "$ENDPOINT_URL" ^
   -H "content-type: application/json" ^
+  -d @samples/pinecone_chatbot_assistant_rag_request.json
+
+curl -X POST "$ENDPOINT_URL" ^
+  -H "content-type: application/json" ^
   -d @samples/pinecone_recommendations_request.json
 
 curl -X POST "$ENDPOINT_URL" ^
@@ -156,6 +180,11 @@ Expected Response Fields
 ------------------------
 For semantic search, retrieved_context contains ranked Pinecone matches,
 including id, title, content, score, and the original Pinecone metadata.
+
+For chatbot_rag, assistant_rag, and chatbot_assistant requests, the response
+contains retrieval_source, retrieved_context, agents, answer, steps,
+safety_notes, citations, and agent_consensus. The retrieval_source must be
+pinecone for the CodePipeline smoke test to pass.
 
 For recommendation requests, recommendations contains ranked similar records,
 including id, title, content, score, and metadata. When seed_id is used, the
@@ -173,11 +202,12 @@ matches.
 CodePipeline Behavior
 ---------------------
 The endpoint deployment buildspec runs Pinecone semantic search and
-recommendation systems smoke tests after CloudFormation deploys the Lambda
-Function URL. It also runs the Pinecone memory for AI agents task. The smoke
-tests now also run the Pinecone duplicate or similarity detection task. The
-smoke tests succeed when retrieval_source is "pinecone", the relevant result
-list is present, and an agent memory id is returned.
+Pinecone RAG for chatbots and assistants smoke tests after CloudFormation
+deploys the Lambda Function URL. It also runs recommendation systems, Pinecone
+memory for AI agents, duplicate or similarity detection, classification and
+clustering, and the full OpenAI multi-agent RAG endpoint smoke test. The smoke
+tests succeed when retrieval_source is "pinecone", the relevant result list is
+present, and an agent memory id is returned.
 
 Troubleshooting
 ---------------

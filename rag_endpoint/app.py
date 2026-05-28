@@ -39,6 +39,7 @@ AGENTS = [
 
 AGENT_OUTPUT_SCHEMA = {"type": "object", "additionalProperties": False, "properties": {"summary": {"type": "string"}, "findings": {"type": "array", "items": {"type": "string"}}, "citations": {"type": "array", "items": {"type": "object", "additionalProperties": False, "properties": {"id": {"type": "string"}, "title": {"type": "string"}}, "required": ["id", "title"]}}, "confidence": {"type": "string", "enum": ["low", "medium", "high"]}}, "required": ["summary", "findings", "citations", "confidence"]}
 FINAL_OUTPUT_SCHEMA = {"type": "object", "additionalProperties": False, "properties": {"answer": {"type": "string"}, "steps": {"type": "array", "items": {"type": "string"}}, "safety_notes": {"type": "array", "items": {"type": "string"}}, "citations": {"type": "array", "items": {"type": "object", "additionalProperties": False, "properties": {"id": {"type": "string"}, "title": {"type": "string"}}, "required": ["id", "title"]}}, "agent_consensus": {"type": "string"}}, "required": ["answer", "steps", "safety_notes", "citations", "agent_consensus"]}
+CHATBOT_RAG_MODES = {"answer", "chatbot_rag", "assistant_rag", "chatbot_assistant"}
 
 
 def _tokenize(text):
@@ -610,7 +611,26 @@ def handler(event, context):
         retrieved_context, retrieval_source = retrieve_context(question, documents, top_k=top_k)
         if mode == "semantic_search":
             return response(200, {"question": question, "document": str(KNOWLEDGE_PATH), "retrieval_source": retrieval_source, "retrieved_context": retrieved_context})
+        if mode not in CHATBOT_RAG_MODES:
+            return response(400, {"error": f"Unsupported mode {mode!r}."})
         agent_outputs, final = answer_question(question, retrieved_context, requested_agents=requested_agents)
-        return response(200, {"question": question, "document": str(KNOWLEDGE_PATH), "retrieval_source": retrieval_source, "agents": agent_outputs, "answer": final["answer"], "steps": final["steps"], "safety_notes": final["safety_notes"], "citations": final["citations"], "agent_consensus": final["agent_consensus"], "retrieved_context": retrieved_context})
+        return response(
+            200,
+            {
+                "mode": mode,
+                "conversation_id": payload.get("conversation_id"),
+                "assistant_id": payload.get("assistant_id"),
+                "question": question,
+                "document": str(KNOWLEDGE_PATH),
+                "retrieval_source": retrieval_source,
+                "agents": agent_outputs,
+                "answer": final["answer"],
+                "steps": final["steps"],
+                "safety_notes": final["safety_notes"],
+                "citations": final["citations"],
+                "agent_consensus": final["agent_consensus"],
+                "retrieved_context": retrieved_context,
+            },
+        )
     except Exception as error:
         return response(500, {"error": str(error)})

@@ -61,6 +61,7 @@ Sample files:
 ```text
 samples/open_ai_rag_endpoint_request.json
 samples/open_ai_rag_endpoint_response.example.json
+samples/pinecone_chatbot_assistant_rag_request.json
 samples/pinecone_semantic_search_request.json
 samples/pinecone_recommendations_request.json
 samples/pinecone_agent_memory_request.json
@@ -90,6 +91,21 @@ Pinecone semantic search-only task:
   "top_k": 5
 }
 ```
+
+Pinecone RAG for chatbots and assistants task:
+
+```json
+{
+  "mode": "chatbot_rag",
+  "conversation_id": "demo-chatbot-session-001",
+  "assistant_id": "support-assistant",
+  "question": "What context should the assistant use before answering a support question about edge cloud and content delivery?",
+  "top_k": 5
+}
+```
+
+Use `mode: "assistant_rag"` or `mode: "chatbot_assistant"` for the same
+Pinecone-backed multi-agent answer path when naming the task for assistants.
 
 Pinecone recommendation systems task:
 
@@ -217,7 +233,7 @@ The AWS defaults currently filled in are:
 - Region: `us-west-1`
 - Artifact bucket: `mlopswithsagemaker111`
 - CodeStar connection: `arn:aws:codeconnections:us-west-1:659613508664:connection/4ea8863c-728d-450a-8752-251946939b36`
-- GitHub repository: `kalla86840/awspineconeduplicateorsimilaritydetection`
+- GitHub repository: `kalla86840/awspineconeclassificationandclusteringsupport`
 - OpenAI secret ARN: `arn:aws:secretsmanager:us-west-1:659613508664:secret:openai/api-key-6BGXhJ`
 - Pinecone secret ARN: `arn:aws:secretsmanager:us-west-1:659613508664:secret:awspineconeapikey1-kiudra`
 - Pinecone index: `news-demo`
