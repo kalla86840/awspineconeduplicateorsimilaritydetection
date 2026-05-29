@@ -1,7 +1,11 @@
 [
   {
     "ParameterKey": "ProjectName",
-    "ParameterValue": "open-ai-agentic-rag"
+    "ParameterValue": "open-ai-pinecone-duplicae-detection"
+  },
+  {
+    "ParameterKey": "PipelineName",
+    "ParameterValue": "open-ai-pinecone-duplicae-detection"
   },
   {
     "ParameterKey": "ArtifactBucketName",
@@ -13,7 +17,7 @@
   },
   {
     "ParameterKey": "RepositoryId",
-    "ParameterValue": "kalla86840/awspineconemultimodalretrieval"
+    "ParameterValue": "kalla86840/awspineconeduplicateorsimilaritydetection"
   },
   {
     "ParameterKey": "BranchName",

@@ -7,10 +7,18 @@ It now includes two deployable endpoint paths:
 1. `rag_endpoint/`: a multi-agent OpenAI RAG Lambda Function URL that retrieves from a plain text knowledge file and applies multiple agents before returning an answer.
 2. `agentic_endpoint/`: an agentic hospital RAG Lambda Function URL that retrieves hospital context, runs three OpenAI agents, and returns a structured care-coordination inference.
 
-## Duplicate and Similarity Detection
+## Recommendation Systems
 
-Use the local detector to find exact duplicate files and near-similar text/code
-files across generated packages:
+This repository is centered on a Pinecone recommendation systems endpoint. It
+uses OpenAI `text-embedding-3-small` with `PINECONE_DIMENSION=1024`, so the
+target Pinecone index must also be created with dimension `1024`.
+
+The endpoint recommends similar records by embedding a `seed_text`, known
+Pinecone `seed_id`, or user interest profile and querying the `news-demo`
+Pinecone index in real time.
+
+The local detector is still available for finding exact duplicate files and
+near-similar text/code files across generated packages:
 
 ```powershell
 python scripts/detect_similarity.py --root . --threshold 0.95 --min-size 20 --exclude downloads --exclude *.zip
@@ -33,7 +41,7 @@ GitHub repository
   -> CloudFormation deploys Lambda Function URL endpoints
   -> Lambda embeds the query with OpenAI and retrieves relevant RAG context from Pinecone
   -> Lambda calls OpenAI
-  -> Endpoint returns grounded real-time inference
+  -> Endpoint returns ranked recommendations or grounded real-time inference
 ```
 
 ## Standalone OpenAI RAG Endpoint
@@ -83,7 +91,27 @@ Request shape:
 }
 ```
 
-Pinecone semantic search-only task:
+Pinecone recommendation systems task:
+
+```json
+{
+  "mode": "recommendations",
+  "seed_text": "Recent earnings call transcripts and market news mentioning edge cloud, content delivery, and EGIO.",
+  "interests": [
+    "earnings calls",
+    "edge cloud",
+    "content delivery",
+    "EGIO"
+  ],
+  "top_k": 5
+}
+```
+
+You can also send `seed_id` instead of `seed_text` when you want recommendations
+similar to a known Pinecone record. The endpoint excludes that seed record from
+the returned `recommendations`.
+
+Pinecone semantic search compatibility task:
 
 ```json
 {
@@ -92,6 +120,21 @@ Pinecone semantic search-only task:
   "top_k": 5
 }
 ```
+
+Pinecone RAG for chatbots and assistants task:
+
+```json
+{
+  "mode": "chatbot_rag",
+  "conversation_id": "demo-chatbot-session-001",
+  "assistant_id": "support-assistant",
+  "question": "What context should the assistant use before answering a support question about edge cloud and content delivery?",
+  "top_k": 5
+}
+```
+
+Use `mode: "assistant_rag"` or `mode: "chatbot_assistant"` for the same
+Pinecone-backed multi-agent answer path when naming the task for assistants.
 
 Pinecone multimodal retrieval task:
 
@@ -113,41 +156,6 @@ Pinecone multimodal retrieval task:
 The endpoint uses OpenAI vision to describe submitted images, fuses those image
 descriptions with the text query and metadata, embeds the fused query, and
 retrieves matching records from Pinecone.
-
-Pinecone RAG for chatbots and assistants task:
-
-```json
-{
-  "mode": "chatbot_rag",
-  "conversation_id": "demo-chatbot-session-001",
-  "assistant_id": "support-assistant",
-  "question": "What context should the assistant use before answering a support question about edge cloud and content delivery?",
-  "top_k": 5
-}
-```
-
-Use `mode: "assistant_rag"` or `mode: "chatbot_assistant"` for the same
-Pinecone-backed multi-agent answer path when naming the task for assistants.
-
-Pinecone recommendation systems task:
-
-```json
-{
-  "mode": "recommendations",
-  "seed_text": "Recent earnings call transcripts and market news mentioning edge cloud, content delivery, and EGIO.",
-  "interests": [
-    "earnings calls",
-    "edge cloud",
-    "content delivery",
-    "EGIO"
-  ],
-  "top_k": 5
-}
-```
-
-You can also send `seed_id` instead of `seed_text` when you want recommendations
-similar to a known Pinecone record. The endpoint excludes that seed record from
-the returned `recommendations`.
 
 Pinecone memory for AI agents task:
 
@@ -209,7 +217,7 @@ Agent sequence:
 
 The endpoint response includes `agents`, `answer`, `steps`, `safety_notes`, `citations`, `agent_consensus`, and `retrieved_context`.
 
-After deployment, get the URL from the `open-ai-agentic-rag-endpoint` CloudFormation stack output named `EndpointUrl`. The CodePipeline name is `open-ai-agentic-rag-endpoint-pipeline`.
+After deployment, get the URL from the `open-ai-pinecone-duplicae-detection-endpoint` CloudFormation stack output named `EndpointUrl`. The CodePipeline name is `open-ai-pinecone-duplicae-detection`.
 
 ## Agentic Hospital RAG Endpoint
 
@@ -255,7 +263,7 @@ The AWS defaults currently filled in are:
 - Region: `us-west-1`
 - Artifact bucket: `mlopswithsagemaker111`
 - CodeStar connection: `arn:aws:codeconnections:us-west-1:659613508664:connection/4ea8863c-728d-450a-8752-251946939b36`
-- GitHub repository: `kalla86840/awspineconemultimodalretrieval`
+- GitHub repository: `kalla86840/awspineconeduplicateorsimilaritydetection`
 - OpenAI secret ARN: `arn:aws:secretsmanager:us-west-1:659613508664:secret:openai/api-key-6BGXhJ`
 - Pinecone secret ARN: `arn:aws:secretsmanager:us-west-1:659613508664:secret:awspineconeapikey1-kiudra`
 - Pinecone index: `news-demo`
@@ -266,6 +274,7 @@ The AWS defaults currently filled in are:
 - Pinecone classification namespace: `news`
 - Pinecone clustering namespace: `news`
 - Pinecone multimodal namespace: `news`
+- Pinecone dimension: `1024`
 - Duplicate score threshold: `0.98`
 - Similarity score threshold: `0.85`
 - Pinecone upsert on query: `false`, because `news-demo` already contains the news records.
@@ -310,13 +319,14 @@ aws secretsmanager describe-secret \
 aws cloudformation deploy \
   --region us-west-1 \
   --template-file infrastructure/open-ai-rag-endpoint-cicd.yaml \
-  --stack-name open-ai-agentic-rag-endpoint-cicd \
+  --stack-name open-ai-pinecone-duplicae-detection-cicd \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides \
-    ProjectName=open-ai-agentic-rag \
+    ProjectName=open-ai-pinecone-duplicae-detection \
+    PipelineName=open-ai-pinecone-duplicae-detection \
     ArtifactBucketName=mlopswithsagemaker111 \
     CodeStarConnectionArn=arn:aws:codeconnections:us-west-1:659613508664:connection/4ea8863c-728d-450a-8752-251946939b36 \
-    RepositoryId=kalla86840/awspineconemultimodalretrieval \
+    RepositoryId=kalla86840/awspineconeduplicateorsimilaritydetection \
     BranchName=main \
     OpenAIApiKeySecretArn=arn:aws:secretsmanager:us-west-1:659613508664:secret:openai/api-key-6BGXhJ \
     PineconeApiKeySecretArn=arn:aws:secretsmanager:us-west-1:659613508664:secret:awspineconeapikey1-kiudra \
@@ -328,6 +338,7 @@ aws cloudformation deploy \
     PineconeClassificationNamespace=news \
     PineconeClusteringNamespace=news \
     PineconeMultimodalNamespace=news \
+    PineconeDimension=1024 \
     DuplicateScoreThreshold=0.98 \
     SimilarityScoreThreshold=0.85
 ```
@@ -340,7 +351,15 @@ curl -X POST "$ENDPOINT_URL" \
   -d @samples/open_ai_rag_endpoint_request.json
 ```
 
-Run the Pinecone semantic search task:
+Run the Pinecone recommendation systems task:
+
+```bash
+curl -X POST "$ENDPOINT_URL" \
+  -H "content-type: application/json" \
+  -d @samples/pinecone_recommendations_request.json
+```
+
+Run the Pinecone semantic search compatibility task:
 
 ```bash
 curl -X POST "$ENDPOINT_URL" \
@@ -354,14 +373,6 @@ Run the Pinecone multimodal retrieval task:
 curl -X POST "$ENDPOINT_URL" \
   -H "content-type: application/json" \
   -d @samples/pinecone_multimodal_retrieval_request.json
-```
-
-Run the Pinecone recommendation systems task:
-
-```bash
-curl -X POST "$ENDPOINT_URL" \
-  -H "content-type: application/json" \
-  -d @samples/pinecone_recommendations_request.json
 ```
 
 Run the Pinecone memory for AI agents task:
@@ -400,7 +411,7 @@ aws cloudformation deploy \
     ProjectName=agentic-open-ai \
     ArtifactBucketName=mlopswithsagemaker111 \
     CodeStarConnectionArn=arn:aws:codeconnections:us-west-1:659613508664:connection/4ea8863c-728d-450a-8752-251946939b36 \
-    RepositoryId=kalla86840/awspineconemultimodalretrieval \
+    RepositoryId=kalla86840/awspineconeduplicateorsimilaritydetection \
     BranchName=main \
     OpenAIApiKeySecretArn=arn:aws:secretsmanager:us-west-1:659613508664:secret:openai/api-key-6BGXhJ \
     OpenAIModel=gpt-5.2

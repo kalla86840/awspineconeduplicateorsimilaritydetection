@@ -20,7 +20,7 @@ PINECONE_CLUSTERING_NAMESPACE = os.environ.get("PINECONE_CLUSTERING_NAMESPACE", 
 PINECONE_MULTIMODAL_NAMESPACE = os.environ.get("PINECONE_MULTIMODAL_NAMESPACE", PINECONE_NAMESPACE)
 PINECONE_CLOUD = os.environ.get("PINECONE_CLOUD", "aws")
 PINECONE_REGION = os.environ.get("PINECONE_REGION", "us-east-1")
-PINECONE_DIMENSION = int(os.environ.get("PINECONE_DIMENSION", "1536"))
+PINECONE_DIMENSION = int(os.environ.get("PINECONE_DIMENSION", "1024"))
 PINECONE_METRIC = os.environ.get("PINECONE_METRIC", "cosine")
 ENABLE_PINECONE = os.environ.get("ENABLE_PINECONE", "true").lower() == "true"
 PINECONE_UPSERT_ON_QUERY = os.environ.get("PINECONE_UPSERT_ON_QUERY", "false").lower() == "true"
@@ -235,8 +235,10 @@ def recommend_from_pinecone(payload, documents, top_k=TOP_K):
             raise ValueError(f"Seed record {seed_id!r} was not found in Pinecone namespace {PINECONE_NAMESPACE!r}.")
         vector = _pinecone_result_get(seed_record, "values")
         seed_text = seed_text or _record_to_seed_text(seed_record)
+        if not vector and not seed_text:
+            raise ValueError(f"Seed record {seed_id!r} did not include vector values or usable recommendation text.")
 
-    if vector is None:
+    if not vector:
         user_profile = payload.get("user_profile") or {}
         interests = payload.get("interests") or []
         if seed_text and (user_profile or interests):

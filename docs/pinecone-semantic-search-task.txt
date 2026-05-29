@@ -1,20 +1,14 @@
-Pinecone Duplicate Or Similarity Detection Runbook
-==================================================
+Pinecone Recommendation Systems Runbook
+=======================================
 
 Purpose
 -------
-Use Pinecone as the vector database for semantic search in the AWS OpenAI RAG
-real-time endpoint deployed through CodePipeline. The endpoint also runs a
-recommendation systems task by embedding a seed item, seed text, or user
-interest profile and returning the closest Pinecone records. For AI agents, the
-endpoint can also write task memories into Pinecone and recall them later with
-semantic search. The CI/CD guide task for this repository is Pinecone RAG for
-chatbots and assistants: embed the user turn with OpenAI, retrieve grounded
-context from Pinecone in real time, run the multi-agent answer path, and return
-the assistant response with citations. The same endpoint still supports
-duplicate or similarity detection by embedding a candidate item with OpenAI,
-querying Pinecone, and classifying returned records as duplicate, similar, or
-related by score threshold.
+Use Pinecone as the vector database for a recommendation systems task in the
+AWS OpenAI real-time endpoint deployed through CodePipeline. The primary task
+embeds a seed item, seed text, or user interest profile with OpenAI using
+1024-dimensional vectors, queries Pinecone, and returns the closest records as
+ranked recommendations. Semantic search remains available as a compatibility
+mode because it uses the same 1024-dimensional embedding/index contract.
 
 Pinecone Index
 --------------
@@ -26,6 +20,7 @@ Duplicate detection namespace: news
 Cloud: aws
 Region: us-east-1
 Type: Dense
+Dimension: 1024
 
 AWS Secrets Manager
 -------------------
@@ -50,41 +45,16 @@ PINECONE_MEMORY_NAMESPACE=agent-memory
 PINECONE_DUPLICATE_NAMESPACE=news
 PINECONE_CLOUD=aws
 PINECONE_REGION=us-east-1
-PINECONE_DIMENSION=1536
+PINECONE_DIMENSION=1024
 PINECONE_UPSERT_ON_QUERY=false
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 DUPLICATE_SCORE_THRESHOLD=0.98
 SIMILARITY_SCORE_THRESHOLD=0.85
 
-Semantic Search Request
------------------------
-Use this request body against the deployed Lambda Function URL:
-
-{
-  "mode": "semantic_search",
-  "question": "What recent earnings call transcripts mention EGIO?",
-  "top_k": 5
-}
-
-Pinecone RAG For Chatbots And Assistants Request
-------------------------------------------------
-Use this request body to run the real-time assistant answer path over Pinecone
-retrieval. The endpoint preserves conversation_id and assistant_id in the
-response so callers can correlate the answer with a chatbot session.
-
-{
-  "mode": "chatbot_rag",
-  "conversation_id": "demo-chatbot-session-001",
-  "assistant_id": "support-assistant",
-  "question": "What context should the assistant use before answering a support question about edge cloud and content delivery?",
-  "top_k": 5
-}
-
-Equivalent mode aliases are assistant_rag and chatbot_assistant.
-
 Recommendation Systems Request
 ------------------------------
-Use this request body to ask Pinecone for similar records:
+Use this request body to ask Pinecone for similar records. This is the primary
+CodePipeline smoke test for this repository:
 
 {
   "mode": "recommendations",
@@ -106,50 +76,15 @@ You can also use a Pinecone record as the seed when you already know its id:
   "top_k": 5
 }
 
-Duplicate Or Similarity Detection Request
------------------------------------------
-Use this request body to detect whether a candidate item already exists or is
-near an existing Pinecone record:
+Semantic Search Compatibility Request
+-------------------------------------
+Use this request body when you need the older semantic search behavior over the
+same 1024-dimensional Pinecone index:
 
 {
-  "mode": "duplicate_similarity",
-  "candidate_id": "candidate-egio-edge-cloud-news",
-  "candidate_text": "Recent market news and earnings call transcripts discussing EGIO, edge cloud services, content delivery, and infrastructure strategy.",
-  "top_k": 5,
-  "duplicate_threshold": 0.98,
-  "similarity_threshold": 0.85
-}
-
-The endpoint embeds candidate_text with OpenAI, queries the configured Pinecone
-namespace, excludes candidate_id when present, and returns likely_duplicates,
-similar_records, and all matches with a classification field.
-
-Pinecone Memory For AI Agents Task
-----------------------------------
-Use this request body to store a durable agent memory in Pinecone. The endpoint
-embeds the memory with OpenAI, upserts it to the agent-memory namespace, and can
-immediately recall related memories when query is included.
-
-{
-  "mode": "agent_memory",
-  "action": "write",
-  "agent_id": "research-agent",
-  "task_id": "pinecone-memory-ci",
-  "memory_type": "episodic",
-  "title": "CodePipeline Pinecone Memory Task",
-  "content": "The agent deployed an AWS Lambda Function URL through CodePipeline, used OpenAI embeddings, stored task memory in Pinecone, and verified retrieval for future AI agent context.",
-  "query": "What did the agent verify during the CodePipeline Pinecone memory task?",
-  "top_k": 3
-}
-
-To recall memories without writing a new one:
-
-{
-  "mode": "agent_memory",
-  "action": "search",
-  "agent_id": "research-agent",
-  "query": "What did the agent verify during deployment?",
-  "top_k": 3
+  "mode": "semantic_search",
+  "question": "What recent earnings call transcripts mention EGIO?",
+  "top_k": 5
 }
 
 Curl Test
@@ -158,56 +93,28 @@ Replace ENDPOINT_URL with the CloudFormation output named EndpointUrl:
 
 curl -X POST "$ENDPOINT_URL" ^
   -H "content-type: application/json" ^
-  -d @samples/pinecone_semantic_search_request.json
-
-curl -X POST "$ENDPOINT_URL" ^
-  -H "content-type: application/json" ^
-  -d @samples/pinecone_chatbot_assistant_rag_request.json
-
-curl -X POST "$ENDPOINT_URL" ^
-  -H "content-type: application/json" ^
   -d @samples/pinecone_recommendations_request.json
 
 curl -X POST "$ENDPOINT_URL" ^
   -H "content-type: application/json" ^
-  -d @samples/pinecone_agent_memory_request.json
-
-curl -X POST "$ENDPOINT_URL" ^
-  -H "content-type: application/json" ^
-  -d @samples/pinecone_duplicate_similarity_request.json
+  -d @samples/pinecone_semantic_search_request.json
 
 Expected Response Fields
 ------------------------
-For semantic search, retrieved_context contains ranked Pinecone matches,
-including id, title, content, score, and the original Pinecone metadata.
-
-For chatbot_rag, assistant_rag, and chatbot_assistant requests, the response
-contains retrieval_source, retrieved_context, agents, answer, steps,
-safety_notes, citations, and agent_consensus. The retrieval_source must be
-pinecone for the CodePipeline smoke test to pass.
-
 For recommendation requests, recommendations contains ranked similar records,
 including id, title, content, score, and metadata. When seed_id is used, the
 seed record is excluded from the returned recommendations.
 
-For agent_memory write requests, stored_memory contains the Pinecone memory id,
-namespace, and metadata. When query is included, memories contains ranked memory
-matches from the agent-memory namespace.
-
-For duplicate_similarity requests, likely_duplicates contains matches at or
-above DUPLICATE_SCORE_THRESHOLD, similar_records contains matches at or above
-SIMILARITY_SCORE_THRESHOLD, and matches contains the top classified Pinecone
-matches.
+For semantic search compatibility requests, retrieved_context contains ranked
+Pinecone matches, including id, title, content, score, and the original
+Pinecone metadata.
 
 CodePipeline Behavior
 ---------------------
-The endpoint deployment buildspec runs Pinecone semantic search and
-Pinecone RAG for chatbots and assistants smoke tests after CloudFormation
-deploys the Lambda Function URL. It also runs recommendation systems, Pinecone
-memory for AI agents, duplicate or similarity detection, classification and
-clustering, and the full OpenAI multi-agent RAG endpoint smoke test. The smoke
-tests succeed when retrieval_source is "pinecone", the relevant result list is
-present, and an agent memory id is returned.
+The endpoint deployment buildspec runs the Pinecone recommendation systems
+smoke test first after CloudFormation deploys the Lambda Function URL. It then
+runs semantic search as a compatibility check. Both use 1024-dimensional OpenAI
+embeddings and must query a Pinecone index with dimension 1024.
 
 Troubleshooting
 ---------------
@@ -220,4 +127,4 @@ existing news index so the endpoint does not insert local sample documents.
 
 If dimensions mismatch, confirm the Pinecone index dimension matches
 PINECONE_DIMENSION and the OpenAI embedding model dimension. The current project
-uses text-embedding-3-small with 1536 dimensions.
+uses text-embedding-3-small with 1024 dimensions.

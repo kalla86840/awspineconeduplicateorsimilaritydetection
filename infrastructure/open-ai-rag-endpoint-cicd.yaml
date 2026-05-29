@@ -1,10 +1,13 @@
 ﻿AWSTemplateFormatVersion: "2010-09-09"
-Description: CodePipeline for packaging and deploying the OpenAI and Pinecone multimodal retrieval real-time endpoint.
+Description: CodePipeline for packaging and deploying the OpenAI and Pinecone duplicate/similarity detection real-time endpoint.
 
 Parameters:
   ProjectName:
     Type: String
-    Default: open-ai-agentic-rag
+    Default: open-ai-pinecone-duplicae-detection
+  PipelineName:
+    Type: String
+    Default: open-ai-pinecone-duplicae-detection
   ArtifactBucketName:
     Type: String
     Default: mlopswithsagemaker111
@@ -13,7 +16,7 @@ Parameters:
     Default: arn:aws:codeconnections:us-west-1:659613508664:connection/4ea8863c-728d-450a-8752-251946939b36
   RepositoryId:
     Type: String
-    Default: kalla86840/awspineconemultimodalretrieval
+    Default: kalla86840/awspineconeduplicateorsimilaritydetection
   BranchName:
     Type: String
     Default: main
@@ -53,6 +56,9 @@ Parameters:
   SimilarityScoreThreshold:
     Type: String
     Default: "0.85"
+  PineconeDimension:
+    Type: String
+    Default: "1024"
 
 Resources:
   CodeBuildRole:
@@ -168,6 +174,8 @@ Resources:
             Value: !Ref PineconeClusteringNamespace
           - Name: PINECONE_MULTIMODAL_NAMESPACE
             Value: !Ref PineconeMultimodalNamespace
+          - Name: PINECONE_DIMENSION
+            Value: !Ref PineconeDimension
           - Name: DUPLICATE_SCORE_THRESHOLD
             Value: !Ref DuplicateScoreThreshold
           - Name: SIMILARITY_SCORE_THRESHOLD
@@ -180,7 +188,7 @@ Resources:
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
-      Name: !Sub ${ProjectName}-endpoint-pipeline
+      Name: !Ref PipelineName
       RoleArn: !GetAtt CodePipelineRole.Arn
       ArtifactStore:
         Type: S3

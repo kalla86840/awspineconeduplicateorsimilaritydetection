@@ -1,16 +1,16 @@
 ﻿AWSTemplateFormatVersion: "2010-09-09"
-Description: Real-time AWS Lambda Function URL endpoint for OpenAI and Pinecone multimodal retrieval.
+Description: Real-time AWS Lambda Function URL endpoint for OpenAI and Pinecone duplicate/similarity detection.
 
 Parameters:
   ProjectName:
     Type: String
-    Default: open-ai-agentic-rag
+    Default: open-ai-pinecone-duplicae-detection
   ArtifactBucketName:
     Type: String
     Default: mlopswithsagemaker111
   LambdaZipKey:
     Type: String
-    Default: open-ai-agentic-rag/open-ai-agentic-rag-endpoint.zip
+    Default: open-ai-pinecone-duplicae-detection/open-ai-pinecone-duplicae-detection-endpoint.zip
   OpenAIApiKeySecretArn:
     Type: String
     Default: arn:aws:secretsmanager:us-west-1:659613508664:secret:openai/api-key-6BGXhJ
@@ -61,6 +61,10 @@ Parameters:
   OpenAIEmbeddingModel:
     Type: String
     Default: text-embedding-3-small
+  PineconeDimension:
+    Type: String
+    Default: "1024"
+    Description: Pinecone index vector dimension. Must match the OpenAI embedding dimension used by this endpoint.
 
 Resources:
   RagEndpointRole:
@@ -122,7 +126,7 @@ Resources:
           SIMILARITY_SCORE_THRESHOLD: !Ref SimilarityScoreThreshold
           PINECONE_CLOUD: !Ref PineconeCloud
           PINECONE_REGION: !Ref PineconeRegion
-          PINECONE_DIMENSION: "1536"
+          PINECONE_DIMENSION: !Ref PineconeDimension
           PINECONE_UPSERT_ON_QUERY: "false"
           ENABLE_PINECONE: "true"
           RAG_KNOWLEDGE_PATH: knowledge/open_ai_rag_knowledge.txt
