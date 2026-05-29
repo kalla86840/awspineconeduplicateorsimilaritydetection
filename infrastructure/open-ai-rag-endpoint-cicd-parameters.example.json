@@ -1,11 +1,11 @@
 [
   {
     "ParameterKey": "ProjectName",
-    "ParameterValue": "open-ai-pinecone-duplicae-detection"
+    "ParameterValue": "open-ai-pinecone-duplicate-detection"
   },
   {
     "ParameterKey": "PipelineName",
-    "ParameterValue": "open-ai-pinecone-duplicae-detection"
+    "ParameterValue": "open-ai-pinecone-duplicate-detection"
   },
   {
     "ParameterKey": "ArtifactBucketName",
